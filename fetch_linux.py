@@ -1,6 +1,6 @@
 # ypt1972
 import requests
-import beautifulsoap4
+from bs4 import BeautifulSoup
 import re
 import os
 from packaging import version
