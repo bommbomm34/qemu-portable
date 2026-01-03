@@ -14,16 +14,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Install Python Dependencies and Fetch
+      # Step 1: Install Python Libraries and Run Fetch Script
+      # We combine these to ensure they run in the same shell/environment
+      - name: Install Dependencies and Fetch Installer
         shell: cmd
         run: |
-          pip install requests beautifulsoup4 packaging
+          pip install requests beautifulsoup4 packaging bs4
           python fetch_windows.py
           
-      - name: Extract and Clean
+      # Step 2: Extract the installer using the silent flag
+      - name: Extract QEMU
         shell: cmd
         run: |
-          :: Runs the downloaded installer in silent mode to an 'installation' folder
           qemu.exe /S /D=%CD%\installation
           cd installation
           if exist qemu-uninstall.exe del qemu-uninstall.exe
@@ -50,23 +52,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Install Dependencies
+      # Step 1: Install Linux System Dependencies (Required for QEMU build)
+      - name: Install System Build Tools
         run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build libglib2.0-dev libpixman-1-dev
-          python -m pip install --upgrade pip
-          pip install requests beautifulsoup4 packaging
       
-      - name: Run Fetch Script
-        run: python fetch_linux.py
+      # Step 2: Install Python Libraries and Run Fetch Script
+      # Installs requests, bs4, and packaging, then runs the script
+      - name: Install Python Libs and Fetch Source
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4 packaging bs4
+          python fetch_linux.py
           
+      # Step 3: Build QEMU from Source
       - name: Compile QEMU
         run: |
-          # Extract the tarball downloaded by fetch_linux.py
           tar xvJf qemu.tar.xz
           cd qemu-*
-          
-          # Configure the build
           ./configure \
             --target-list=x86_64-softmmu \
             --enable-kvm \
@@ -85,12 +89,8 @@ jobs:
             --enable-virtfs \
             --enable-coroutine-pool \
             --enable-slirp
-            
-          # Compile using all available CPU cores
           make -j$(nproc)
-          
-          # Install to a local directory for zipping
-          mkdir -p ../installation
+          mkdir ../installation
           make install DESTDIR=$(pwd)/../installation
           
       - name: Archive Release
