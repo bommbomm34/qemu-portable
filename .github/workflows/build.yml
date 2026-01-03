@@ -3,8 +3,8 @@ on:
   workflow_dispatch:
 
 permissions:
-    contents: write    
-    
+  contents: write    
+
 jobs:
   build-windows:
     name: Create Windows Release
@@ -14,10 +14,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - name: Install Dependencies
+        shell: cmd
+        run: |
+          pip install requests beautifulsoup4 packaging
+      
       - name: installer
         shell: cmd
         run: |
-          pip install requests beautifulsoup4
           python fetch_windows.py
           
       - name: innoextract 
@@ -40,6 +44,7 @@ jobs:
           artifacts: "installation/${{ env.targetZip }}"
           allowUpdates: true
           token: ${{ secrets.GITHUB_TOKEN }}
+
   build-linux:
     name: Create Linux Release
     runs-on: ubuntu-latest
@@ -48,12 +53,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4 packaging
+      
+      - name: Install System Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libglib2.0-dev libpixman-1-dev
+      
       - name: installer
         run: |
-           python -m pip install --upgrade pip
-           pip install beautifulsoup4 requests
+           python fetch_linux.py
           
-      - name: innoextract 
+      - name: Build QEMU
         run: |
           tar xvJf qemu.tar.xz
           cd qemu-*
@@ -75,9 +89,9 @@ jobs:
             --enable-virtfs \
             --enable-coroutine-pool \
             --enable-slirp
-          make
-          mkdir ./installation
-          make install DESTDIR=./installation
+          make -j$(nproc)
+          mkdir ../installation
+          make install DESTDIR=$(pwd)/../installation
           
       - name: Archive Release
         uses: thedoctor0/zip-release@master
