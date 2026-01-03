@@ -1,31 +1,28 @@
 name: portable-release-actions-workflow
 on:
-  push:
-    # Sequence of patterns matched against refs/tags
-    tags:
-      - '*' # Push events to matching v*, i.e. v1.0, v20.15.10
+  workflow_dispatch:
 
 permissions:
     contents: write    
     
 jobs:
-  build:
-    name: Create Release
+  build-windows:
+    name: Create Windows Release
     runs-on: windows-latest
     env:
-      targetZip: qemu-w64-portable-${{ github.ref_name }}.zip
+      targetZip: qemu-w64-latest.zip
     steps:
       - uses: actions/checkout@v4
       
       - name: installer
         shell: cmd
         run: |
-          curl https://qemu.weilnetz.de/w64/qemu-w64-setup-${{ github.ref_name }}.exe -L -O
+          python fetch_windows.py
           
       - name: innoextract 
         shell: cmd
         run: |
-          qemu-w64-setup-${{ github.ref_name }}.exe /S /D=%CD%\installation &&^
+          qemu.exe /S /D=%CD%\installation &&^
           cd installation &&^
           del qemu-uninstall.exe
           
@@ -39,6 +36,58 @@ jobs:
       - name: Release prebuilt
         uses: ncipollo/release-action@v1
         with:
+          artifacts: "installation/${{ env.targetZip }}"
+          allowUpdates: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+  build-linux:
+    name: Create Linux Release
+    runs-on: ubuntu-latest
+    env:
+      targetZip: qemu-linux-installation.zip
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: installer
+        run: |
+          python fetch_linux.py
+          
+      - name: innoextract 
+        run: |
+          tar xvJf qemu.tar.xz
+          cd qemu-*
+          ./configure \
+            --target-list=x86_64-softmmu \
+            --enable-kvm \
+            --enable-system \
+            --disable-user \
+            --disable-linux-user \
+            --disable-bsd-user \
+            --disable-guest-agent \
+            --disable-gtk \
+            --disable-sdl \
+            --disable-vnc \
+            --disable-spice \
+            --disable-curl \
+            --disable-docs \
+            --disable-tools \
+            --enable-virtfs \
+            --enable-coroutine-pool \
+            --enable-slirp
+          make
+          mkdir ./installation
+          make install DESTDIR=./installation
+          
+      - name: Archive Release
+        uses: thedoctor0/zip-release@master
+        with:
+          type: 'zip'
+          directory: "installation"
+          filename: "${{ env.targetZip }}"
+          
+      - name: Release prebuilt
+        uses: ncipollo/release-action@v1
+        with:
+          name: "Linux Release"
           artifacts: "installation/${{ env.targetZip }}"
           allowUpdates: true
           token: ${{ secrets.GITHUB_TOKEN }}
